@@ -11,6 +11,8 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+
   // Text field controllers
   final TextEditingController firstNameController = TextEditingController();
   final TextEditingController lastNameController = TextEditingController();
@@ -23,15 +25,27 @@ class _RegisterPageState extends State<RegisterPage> {
 
   List<String> selectedDays = [];
   final List<String> daysOfWeek = [
-    'Lunes',
-    'Martes',
-    'Miércoles',
-    'Jueves',
-    'Viernes',
-    'Sábado',
-    'Domingo',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
   ];
   bool isLoading = false;
+
+  @override
+  void dispose() {
+    firstNameController.dispose();
+    lastNameController.dispose();
+    emailController.dispose();
+    phoneController.dispose();
+    zoneController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
+    super.dispose();
+  }
 
   // Sign-Up method
   Future<void> signUp() async {
@@ -42,30 +56,32 @@ class _RegisterPageState extends State<RegisterPage> {
         zoneController.text.trim().isEmpty ||
         passwordController.text.trim().isEmpty ||
         confirmPasswordController.text.trim().isEmpty) {
-      showErrorDialog('Por favor completa todos los campos');
+      showErrorDialog('Please fill in all fields');
       return;
     }
 
     if (passwordController.text.trim() !=
         confirmPasswordController.text.trim()) {
-      showErrorDialog('Las contraseñas no coinciden');
+      showErrorDialog('Passwords do not match');
       return;
     }
 
     if (selectedDays.isEmpty) {
-      showErrorDialog('Selecciona al menos un día de disponibilidad');
+      showErrorDialog('Please select at least one available day');
       return;
     }
 
     setState(() => isLoading = true);
 
     try {
-      UserCredential userCredential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
-            email: emailController.text.trim(),
-            password: passwordController.text.trim(),
-          );
+      // Create user in Firebase Auth
+      UserCredential userCredential =
+          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: emailController.text.trim(),
+        password: passwordController.text.trim(),
+      );
 
+      // Create document in Firestore
       FirestoreDatabase database = FirestoreDatabase();
       await database.createUserDocument(
         uid: userCredential.user!.uid,
@@ -77,13 +93,29 @@ class _RegisterPageState extends State<RegisterPage> {
         availableDays: selectedDays,
       );
 
-      if (mounted) Navigator.pushReplacementNamed(context, '/');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Registration successful!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // Redirect to app root (AuthPage) - AuthPage will render ProfilePage
+        // for the authenticated user.
+        Navigator.pushReplacementNamed(context, '/');
+      }
     } on FirebaseAuthException catch (e) {
-      String message = 'Error al crear cuenta';
+      String message = 'Error creating account';
       if (e.code == 'email-already-in-use') {
-        message = 'Ya existe una cuenta con este correo';
+        message = 'An account with this email already exists';
+      } else if (e.code == 'weak-password') {
+        message = 'Password must be at least 6 characters';
+      } else if (e.code == 'invalid-email') {
+        message = 'The email address is invalid';
       }
       showErrorDialog(message);
+    } catch (e) {
+      showErrorDialog('Unexpected error: $e');
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -109,141 +141,278 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(25.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              // Logo
-              Icon(Icons.person, size: 80),
-
-              const SizedBox(height: 25),
-
-              // App name
-              Text('App name here'),
-
-              const SizedBox(height: 25),
-
-              // First name textfield
-              TextField(
-                controller: firstNameController,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  hintText: 'Type your first name...',
-                ),
-                obscureText: false,
-              ),
-
-              const SizedBox(height: 10),
-
-              // Last name textfield
-              TextField(
-                controller: lastNameController,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  hintText: 'Type your last name...',
-                ),
-                obscureText: false,
-              ),
-
-              const SizedBox(height: 10),
-
-              // Email textfield
-              TextField(
-                controller: emailController,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  hintText: 'Type your email...',
-                ),
-                obscureText: false,
-              ),
-
-              const SizedBox(height: 10),
-
-              // Phone textfield
-              TextField(
-                controller: phoneController,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  hintText: 'Type your phone...',
-                ),
-                obscureText: false,
-              ),
-
-              const SizedBox(height: 10),
-
-              // Zone textfield
-              TextField(
-                controller: zoneController,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  hintText: 'Type your zone...',
-                ),
-                obscureText: false,
-              ),
-
-              const SizedBox(height: 10),
-
-              // Password textfield
-              TextField(
-                controller: passwordController,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  hintText: 'Type your password...',
-                ),
-                obscureText: true,
-              ),
-
-              const SizedBox(height: 10),
-
-              // Repeat password textfield
-              TextField(
-                controller: confirmPasswordController,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  hintText: 'Repeat password...',
-                ),
-                obscureText: true,
-              ),
-
-              const SizedBox(height: 25),
-
-              // Sign Up button
-              ElevatedButton(onPressed: signUp, child: const Text('Sign Up')),
-
-              const SizedBox(height: 25),
-
-              Row(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(25.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
-                  Text("Already have an account?"),
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.pushNamed(context, '/login-page');
-                    },
-                    child: Text(
-                      ' Log in',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                  // Logo
+                  const Icon(Icons.person_add, size: 80, color: Colors.green),
+
+                  const SizedBox(height: 25),
+
+                  // App name
+                  const Text(
+                    'User Registration',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
                     ),
+                  ),
+
+                  const SizedBox(height: 25),
+
+                  // First name textfield
+                  TextFormField(
+                    controller: firstNameController,
+                    decoration: InputDecoration(
+                      labelText: 'First name',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      prefixIcon: const Icon(Icons.person),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your first name';
+                      }
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Last name textfield
+                  TextFormField(
+                    controller: lastNameController,
+                    decoration: InputDecoration(
+                      labelText: 'Last name',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      prefixIcon: const Icon(Icons.person_outline),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your last name';
+                      }
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Email textfield
+                  TextFormField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      prefixIcon: const Icon(Icons.email),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your email';
+                      }
+                      if (!value.contains('@')) {
+                        return 'Enter a valid email';
+                      }
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Phone textfield
+                  TextFormField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: 'Phone',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      prefixIcon: const Icon(Icons.phone),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your phone number';
+                      }
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Zone textfield
+                  TextFormField(
+                    controller: zoneController,
+                    decoration: InputDecoration(
+                      labelText: 'Neighborhood',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      prefixIcon: const Icon(Icons.location_on),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your neighborhood';
+                      }
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Available days
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Available days:',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          children: daysOfWeek.map((day) {
+                            final isSelected = selectedDays.contains(day);
+                            return FilterChip(
+                              label: Text(day),
+                              selected: isSelected,
+                              onSelected: (selected) {
+                                setState(() {
+                                  if (selected) {
+                                    selectedDays.add(day);
+                                  } else {
+                                    selectedDays.remove(day);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                        if (selectedDays.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: Text(
+                              'Please select at least one day',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Password textfield
+                  TextFormField(
+                    controller: passwordController,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      prefixIcon: const Icon(Icons.lock),
+                    ),
+                    obscureText: true,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter a password';
+                      }
+                      if (value.length < 6) {
+                        return 'Minimum 6 characters';
+                      }
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Repeat password textfield
+                  TextFormField(
+                    controller: confirmPasswordController,
+                    decoration: InputDecoration(
+                      labelText: 'Confirm password',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                    ),
+                    obscureText: true,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please confirm your password';
+                      }
+                      if (value != passwordController.text) {
+                        return 'Passwords do not match';
+                      }
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 25),
+
+                  // Sign Up button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: isLoading ? null : signUp,
+                      style: ElevatedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: isLoading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text(
+                              'Sign up',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 25),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      const Text("Already have an account?"),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pushNamed(context, '/login-page');
+                        },
+                        child: const Text(
+                          ' Log in',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),

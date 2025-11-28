@@ -1,6 +1,7 @@
 // Universidad de la Costa - Computación Móvil - Flutter Application 17:
 import 'package:flutter/material.dart';
 import 'package:flutter_application_17/components/my_back_button.dart';
+import 'package:flutter_application_17/database/firestore_database.dart';
 
 class AssignManagersPage extends StatefulWidget {
   const AssignManagersPage({super.key});
@@ -10,105 +11,325 @@ class AssignManagersPage extends StatefulWidget {
 }
 
 class _AssignManagersPageState extends State<AssignManagersPage> {
-  // form ket
+  final FirestoreDatabase _database = FirestoreDatabase();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
-  // Text field controllers
-  final TextEditingController managerNameController = TextEditingController();
-  final TextEditingController parcelaNameController = TextEditingController();
+  String? selectedUserId;
+  String? selectedParcelaId;
+  Map<String, dynamic>? selectedParcelaData;
+  bool isLoading = false;
 
-  // Build UI
+  Future<void> assignManager() async {
+    if (selectedUserId == null || selectedParcelaId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a user and a plot')),
+      );
+      return;
+    }
+
+    setState(() => isLoading = true);
+
+    try {
+      // Update the plot with the assigned user
+      await _database.updateParcela(
+        parcelaId: selectedParcelaId!,
+        name: selectedParcelaData!['name'],
+        size: selectedParcelaData!['size'],
+        cropType: selectedParcelaData!['cropType'],
+        status: selectedParcelaData!['status'],
+        assignedTo: selectedUserId,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Manager assigned successfully')),
+        );
+        clearSelection();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  void clearSelection() {
+    setState(() {
+      selectedUserId = null;
+      selectedParcelaId = null;
+      selectedParcelaData = null;
+    });
+  }
+
+  Future<void> loadParcelaDetails(String parcelaId) async {
+    try {
+      final parcela = await _database.getParcelaById(parcelaId);
+      setState(() {
+        selectedParcelaData = parcela;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading plot: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
+      body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(25.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              // My back button
-              Row(children: <Widget>[MyBackButton()]),
-
-              Expanded(child: SizedBox()),
-
-              // Form parcelas
-              Form(
-                child: Column(
-                  children: <Widget>[
-                    // 0. Title
-                    Text(
-                      'Asignar responsables',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    // 1. Nombre responsable
-                    TextFormField(
-                      controller: managerNameController,
-                      decoration: const InputDecoration(
-                        hintText: 'Enter manager name',
-                      ),
-                      validator: (String? value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter some text';
-                        }
-                        return null;
-                      },
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    // 2. Select parcela
-                    TextFormField(
-                      controller: parcelaNameController,
-                      decoration: const InputDecoration(
-                        hintText: 'Select parcela',
-                      ),
-                      validator: (String? value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter some text';
-                        }
-                        return null;
-                      },
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    // 3. Estado del huerto
-                    Text('Parcela status: get parcela STATUS with Firebase...'),
-
-                    const SizedBox(height: 10),
-
-                    // 4. Tipo de cultivo
-                    Text('Parcela type: get parcela TYPE with Firebase...'),
-
-                    const SizedBox(height: 10),
-
-                    // Submit button
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16.0),
-                      child: ElevatedButton(
-                        onPressed: () {
-                          if (_formKey.currentState!.validate()) {
-                            // Process form data with Firebase...
-                          }
-                        },
-                        child: const Text('Asignar'),
-                      ),
-                    ),
-                  ],
-                ),
+            children: [
+              // Back button
+              Row(
+                children: [
+                  const MyBackButton(),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Assign Managers',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ],
               ),
 
-              Expanded(child: SizedBox()),
+              const SizedBox(height: 20),
+
+              // Formulario
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Select user',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Users selector
+                                StreamBuilder<List<Map<String, dynamic>>>(
+                                  stream: _database.getAllUsers(),
+                                  builder: (context, snapshot) {
+                                    if (snapshot.connectionState ==
+                                        ConnectionState.waiting) {
+                                      return const Center(
+                                        child: CircularProgressIndicator(),
+                                      );
+                                    }
+
+                                    if (snapshot.hasError) {
+                                      return Text('Error: ${snapshot.error}');
+                                    }
+
+                                    final users = snapshot.data ?? [];
+
+                                    if (users.isEmpty) {
+                                      return const Text(
+                                        'No users available',
+                                      );
+                                    }
+
+                                    return DropdownButtonFormField<String>(
+                                      value: selectedUserId,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Assigned user',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      items: users.map((user) {
+                                        return DropdownMenuItem<String>(
+                                          value: user['id'],
+                                          child: Text(
+                                            '${user['firstName']} ${user['lastName']}',
+                                          ),
+                                        );
+                                      }).toList(),
+                                      onChanged: (value) {
+                                        setState(() => selectedUserId = value);
+                                      },
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Select plot',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Plot selector
+                                StreamBuilder<List<Map<String, dynamic>>>(
+                                  stream: _database.getAllParcelas(),
+                                  builder: (context, snapshot) {
+                                    if (snapshot.connectionState ==
+                                        ConnectionState.waiting) {
+                                      return const Center(
+                                        child: CircularProgressIndicator(),
+                                      );
+                                    }
+
+                                    if (snapshot.hasError) {
+                                      return Text('Error: ${snapshot.error}');
+                                    }
+
+                                    final parcelas = snapshot.data ?? [];
+
+                                    if (parcelas.isEmpty) {
+                                      return const Text(
+                                        'No plots available',
+                                      );
+                                    }
+
+                                    return DropdownButtonFormField<String>(
+                                      value: selectedParcelaId,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Plot',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      items: parcelas.map((parcela) {
+                                        return DropdownMenuItem<String>(
+                                          value: parcela['id'],
+                                          child: Text(parcela['name'] ?? ''),
+                                        );
+                                      }).toList(),
+                                      onChanged: (value) {
+                                        setState(() {
+                                          selectedParcelaId = value;
+                                          if (value != null) {
+                                            loadParcelaDetails(value);
+                                          }
+                                        });
+                                      },
+                                    );
+                                  },
+                                ),
+
+                                // Show selected plot details
+                                if (selectedParcelaData != null) ...[
+                                  const SizedBox(height: 16),
+                                  const Divider(),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Plot details:',
+                                    style: TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildDetailRow(
+                                    'Status:',
+                                    selectedParcelaData!['status'] ?? 'N/A',
+                                  ),
+                                  _buildDetailRow(
+                                    'Crop type:',
+                                    selectedParcelaData!['cropType'] ?? 'N/A',
+                                  ),
+                                  _buildDetailRow(
+                                    'Size:',
+                                    selectedParcelaData!['size'] ?? 'N/A',
+                                  ),
+                                  if (selectedParcelaData!['assignedTo'] != null)
+                                    _buildDetailRow(
+                                      'Current manager:',
+                                      'Assigned',
+                                      isWarning: true,
+                                    ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Assign button
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: isLoading ? null : assignManager,
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.all(16),
+                            ),
+                            child: isLoading
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text(
+                                  'Assign Manager',
+                                    style: TextStyle(fontSize: 16),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value, {bool isWarning = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                color: isWarning ? Colors.orange : null,
+                fontWeight: isWarning ? FontWeight.bold : null,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

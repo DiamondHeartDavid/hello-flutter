@@ -6,7 +6,7 @@ class FirestoreDatabase {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // ==================== USUARIOS ====================
+  // ==================== USERS ====================
 
   Future<void> createUserDocument({
     required String uid,
@@ -16,6 +16,7 @@ class FirestoreDatabase {
     required String phone,
     required String zone,
     required List<String> availableDays,
+    String role = 'volunteer',
   }) async {
     try {
       await _firestore.collection('users').doc(uid).set({
@@ -25,12 +26,12 @@ class FirestoreDatabase {
         'phone': phone,
         'zone': zone,
         'availableDays': availableDays,
-        'role': 'volunteer',
+        'role': role,
         'totalHours': 0,
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      throw Exception('Error al crear usuario: $e');
+      throw Exception('Error creating user: $e');
     }
   }
 
@@ -45,13 +46,32 @@ class FirestoreDatabase {
         .map((doc) => doc.data());
   }
 
-  // ==================== PARCELAS ====================
+  Stream<List<Map<String, dynamic>>> getAllUsers() {
+    return _firestore.collection('users').snapshots().map(
+          (snapshot) => snapshot.docs
+              .map((doc) => {'id': doc.id, ...doc.data()})
+              .toList(),
+        );
+  }
+
+  /// Set the role for a user document in `users` collection.
+  /// Useful for test or admin elevation from the client during development.
+  Future<void> setUserRole({required String uid, required String role}) async {
+    try {
+      // Use set with merge so the document is created if missing (dev/test only)
+      await _firestore.collection('users').doc(uid).set({'role': role}, SetOptions(merge: true));
+    } catch (e) {
+      throw Exception('Error setting user role: $e');
+    }
+  }
+
+  // ==================== PLOTS ====================
 
   Future<void> createParcela({
     required String name,
     required String size,
     required String cropType,
-    String status = 'activa',
+    String status = 'Active',
     String? assignedTo,
   }) async {
     try {
@@ -64,7 +84,7 @@ class FirestoreDatabase {
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      throw Exception('Error al crear parcela: $e');
+      throw Exception('Error creating plot: $e');
     }
   }
 
@@ -80,15 +100,49 @@ class FirestoreDatabase {
         );
   }
 
+  Future<void> updateParcela({
+    required String parcelaId,
+    required String name,
+    required String size,
+    required String cropType,
+    required String status,
+    String? assignedTo,
+  }) async {
+    try {
+      await _firestore.collection('parcelas').doc(parcelaId).update({
+        'name': name,
+        'size': size,
+        'cropType': cropType,
+        'status': status,
+        'assignedTo': assignedTo,
+      });
+    } catch (e) {
+      throw Exception('Error updating plot: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> getParcelaById(String parcelaId) async {
+    try {
+      DocumentSnapshot doc =
+          await _firestore.collection('parcelas').doc(parcelaId).get();
+      if (doc.exists) {
+        return {'id': doc.id, ...doc.data() as Map<String, dynamic>};
+      }
+      return null;
+    } catch (e) {
+      throw Exception('Error getting plot: $e');
+    }
+  }
+
   Future<void> deleteParcela(String parcelaId) async {
     try {
       await _firestore.collection('parcelas').doc(parcelaId).delete();
     } catch (e) {
-      throw Exception('Error al eliminar parcela: $e');
+      throw Exception('Error deleting plot: $e');
     }
   }
 
-  // ==================== TAREAS ====================
+  // ==================== TASKS ====================
 
   Future<void> createTask({
     required String title,
@@ -106,11 +160,11 @@ class FirestoreDatabase {
         'parcelaId': parcelaId,
         'assignedTo': assignedTo,
         'date': Timestamp.fromDate(date),
-        'status': 'pendiente',
+        'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      throw Exception('Error al crear tarea: $e');
+      throw Exception('Error creating task: $e');
     }
   }
 
@@ -127,7 +181,27 @@ class FirestoreDatabase {
         );
   }
 
-  // ==================== PARTICIPACIÓN ====================
+  Stream<List<Map<String, dynamic>>> getAllTasks() {
+    return _firestore
+        .collection('tasks')
+        .orderBy('date')
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => {'id': doc.id, ...doc.data()})
+              .toList(),
+        );
+  }
+
+  Future<void> deleteTask(String taskId) async {
+    try {
+      await _firestore.collection('tasks').doc(taskId).delete();
+    } catch (e) {
+      throw Exception('Error deleting task: $e');
+    }
+  }
+
+  // ==================== PARTICIPATION ====================
 
   Future<void> registerParticipation({
     required String taskId,
@@ -136,7 +210,7 @@ class FirestoreDatabase {
   }) async {
     try {
       String? uid = _auth.currentUser?.uid;
-      if (uid == null) throw Exception('Usuario no autenticado');
+      if (uid == null) throw Exception('User not authenticated');
 
       await _firestore.collection('participation').add({
         'userId': uid,
@@ -155,7 +229,7 @@ class FirestoreDatabase {
         transaction.update(userRef, {'totalHours': currentHours + hoursWorked});
       });
     } catch (e) {
-      throw Exception('Error al registrar participación: $e');
+      throw Exception('Error registering participation: $e');
     }
   }
 }

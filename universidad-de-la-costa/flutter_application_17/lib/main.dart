@@ -4,6 +4,7 @@ import 'package:flutter_application_17/pages/admins/add_tasks_page.dart';
 import 'package:flutter_application_17/pages/admins/assign_managers_page.dart';
 import 'package:flutter_application_17/pages/admins/parcelas_page.dart';
 import 'package:flutter_application_17/pages/home_page.dart';
+import 'package:flutter_application_17/auth/auth.dart';
 import 'package:flutter_application_17/pages/login_page.dart';
 import 'package:flutter_application_17/pages/profile_page.dart';
 import 'package:flutter_application_17/pages/register_page.dart';
@@ -22,11 +23,15 @@ class MainApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'App de Huertos Urbanos',
+      title: 'Urban Gardens App',
 
       // Application routes
       routes: <String, WidgetBuilder>{
-        '/': (context) => const HomePage(),
+        // Use AuthPage as the root so the app will determine if it should
+        // render HomePage or ProfilePage based on the auth state.
+        '/': (context) => const AuthPage(),
+        // Keep separate backing route for HomePage
+        '/home': (context) => const HomePage(),
         '/login-page': (context) => const LoginPage(),
         '/register-page': (context) => const RegisterPage(),
         '/profile-page': (context) => const ProfilePage(),

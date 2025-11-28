@@ -13,11 +13,18 @@ class AuthPage extends StatelessWidget {
       body: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
-          // Usuario autenticado -> ir a Profile
+          // Authenticated user -> ensure the router shows /profile-page
           if (snapshot.hasData) {
+            final String? currentRoute = ModalRoute.of(context)?.settings.name;
+            if (currentRoute != '/profile-page') {
+              // Defer navigation until after build to avoid route exceptions.
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                Navigator.pushReplacementNamed(context, '/profile-page');
+              });
+            }
             return const ProfilePage();
           }
-          // No autenticado -> mostrar HomePage
+          // Not authenticated -> show HomePage
           else {
             return const HomePage();
           }
